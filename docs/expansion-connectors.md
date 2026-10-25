@@ -71,28 +71,28 @@ SB24/SB26 ON, default) or I2C5 (PA12/PA11, SB23/SB25 ON).
 
 Raspberry Pi shield-compatible header.
 
-| Pin | Function / STM32 pin            | Pin | Function / STM32 pin           |
-|-----|----------------------------------|-----|--------------------------------|
-| 1   | 3V3                              | 2   | 5V                             |
-| 3   | GPIO2 / I2C5_SDA (PA12)          | 4   | 5V                             |
-| 5   | GPIO3 / I2C5_SCL (PA11)          | 6   | GND                            |
-| 7   | GPIO4 / MCO1 (PA8)               | 8   | GPIO14 / USART3_TX (PB10)      |
-| 9   | GND                              | 10  | GPIO15 / USART3_RX (PB12)      |
-| 11  | GPIO17 / USART3_RTS (PG8)        | 12  | GPIO18 / SAI2_SCKA (PI5)       |
-| 13  | GPIO27 / SDMMC3_D3 (PD7)         | 14  | GND                            |
-| 15  | GPIO22 / SDMMC3_CK (PG15)        | 16  | GPIO23 / SDMMC3_CMD (PF1)      |
-| 17  | 3V3                              | 18  | GPIO24 / SDMMC3_D0 (PF0)       |
-| 19  | GPIO10 / SPI5_MOSI (PF9)         | 20  | GND                            |
-| 21  | GPIO9 / SPI5_MISO (PF8)          | 22  | GPIO25 / SDMMC3_D1 (PF4)       |
-| 23  | GPIO11 / SPI5_SCK (PF7)          | 24  | GPIO8 / SPI5_NSS (PF6)         |
-| 25  | GND                              | 26  | GPIO7 (PF3)                    |
-| 27  | I2C1_SDA (PF15)                  | 28  | I2C1_SCL (PD12)                |
-| 29  | GPIO5 / MCO2 (PG2)               | 30  | GND                            |
-| 31  | GPIO6 / TIM5_CH2 (PH11)          | 32  | GPIO12 / TIM4_CH2 (PD13)       |
-| 33  | GPIO13 / TIM3_CH2 (PC7)          | 34  | GND                            |
-| 35  | GPIO19 / SAI2_FSA (PI7)          | 36  | GPIO16 / USART3_CTS (PB13)     |
-| 37  | GPIO26 / SDMMC3_D2 (PF5)         | 38  | GPIO20 / SAI2_SDA (PI6)        |
-| 39  | GND                              | 40  | GPIO21 / SAI2_SDB (PF11)       |
+| Function                  | STM32 pin | Pin | Pin | STM32 pin | Function                  |
+|---------------------------|-----------|-----|-----|-----------|---------------------------|
+| 3V3                       | -         | 1   | 2   | -         | 5V                        |
+| GPIO2 / I2C5_SDA          | PA12      | 3   | 4   | -         | 5V                        |
+| GPIO3 / I2C5_SCL          | PA11      | 5   | 6   | -         | GND                       |
+| GPIO4 / MCO1              | PA8       | 7   | 8   | PB10      | GPIO14 / USART3_TX        |
+| GND                       | -         | 9   | 10  | PB12      | GPIO15 / USART3_RX        |
+| GPIO17 / USART3_RTS       | PG8       | 11  | 12  | PI5       | GPIO18 / SAI2_SCKA        |
+| GPIO27 / SDMMC3_D3        | PD7       | 13  | 14  | -         | GND                       |
+| GPIO22 / SDMMC3_CK        | PG15      | 15  | 16  | PF1       | GPIO23 / SDMMC3_CMD       |
+| 3V3                       | -         | 17  | 18  | PF0       | GPIO24 / SDMMC3_D0        |
+| GPIO10 / SPI5_MOSI        | PF9       | 19  | 20  | -         | GND                       |
+| GPIO9 / SPI5_MISO         | PF8       | 21  | 22  | PF4       | GPIO25 / SDMMC3_D1        |
+| GPIO11 / SPI5_SCK         | PF7       | 23  | 24  | PF6       | GPIO8 / SPI5_NSS          |
+| GND                       | -         | 25  | 26  | PF3       | GPIO7                     |
+| I2C1_SDA                  | PF15      | 27  | 28  | PD12      | I2C1_SCL                  |
+| GPIO5 / MCO2              | PG2       | 29  | 30  | -         | GND                       |
+| GPIO6 / TIM5_CH2          | PH11      | 31  | 32  | PD13      | GPIO12 / TIM4_CH2         |
+| GPIO13 / TIM3_CH2         | PC7       | 33  | 34  | -         | GND                       |
+| GPIO19 / SAI2_FSA         | PI7       | 35  | 36  | PB13      | GPIO16 / USART3_CTS       |
+| GPIO26 / SDMMC3_D2        | PF5       | 37  | 38  | PI6       | GPIO20 / SAI2_SDA         |
+| GND                       | -         | 39  | 40  | PF11      | GPIO21 / SAI2_SDB         |
 
 Shared-peripheral notes (UM2534):
 
