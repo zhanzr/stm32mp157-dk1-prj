@@ -1,2 +1,2 @@
-blink_hello
 *.o
+apps/*/blink_hello
