@@ -34,3 +34,4 @@ Expansion connector pinouts: [docs/expansion-connectors.md](docs/expansion-conne
 - [apps/coremark](apps/coremark) — EEMBC CoreMark, ARM vs Thumb-2 builds and scores
 - [apps/record-play](apps/record-play) — interactive audio record (30 s / S-key) and playback, loops
 - [apps/netbench](apps/netbench) — TCP throughput benchmark for GbE and USB NCM gadget
+- [apps/ssd1317_md066_64x48_iic](apps/ssd1317_md066_64x48_iic) — SSD1317 64x48 OLED on I2C5 (CN2), demo port from f425-start
