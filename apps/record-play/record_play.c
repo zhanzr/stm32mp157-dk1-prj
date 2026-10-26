@@ -19,12 +19,6 @@
 
 static volatile sig_atomic_t running = 1;
 
-static void stop_handler(int sig)
-{
-	(void)sig;
-	running = 0;
-}
-
 static struct termios saved_tio;
 static int raw_mode_on;
 
@@ -47,6 +41,48 @@ static void restore_mode(void)
 {
 	if (raw_mode_on)
 		tcsetattr(0, TCSANOW, &saved_tio);
+}
+
+static void stop_handler(int sig)
+{
+	(void)sig;
+	running = 0;
+}
+
+static void tstp_handler(int sig)
+{
+	sigset_t mask;
+
+	(void)sig;
+	restore_mode();
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGTSTP);
+	signal(SIGTSTP, SIG_DFL);
+	sigprocmask(SIG_UNBLOCK, &mask, NULL);
+	raise(SIGTSTP);
+	signal(SIGTSTP, tstp_handler);
+}
+
+static void cont_handler(int sig)
+{
+	(void)sig;
+	set_raw_mode();
+}
+
+static void install_handlers(void)
+{
+	struct sigaction sa;
+
+	memset(&sa, 0, sizeof(sa));
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	sa.sa_handler = stop_handler;
+	sigaction(SIGINT, &sa, NULL);
+	sigaction(SIGTERM, &sa, NULL);
+	sa.sa_handler = tstp_handler;
+	sigaction(SIGTSTP, &sa, NULL);
+	sa.sa_handler = cont_handler;
+	sigaction(SIGCONT, &sa, NULL);
 }
 
 static int wait_key(void)
@@ -166,7 +202,6 @@ static int do_play(snd_pcm_t *pb, const char *buf, size_t bytes)
 	size_t off = 0;
 	double start, last_print = -1;
 
-	snd_pcm_drop(pb);
 	snd_pcm_prepare(pb);
 	start = now_sec();
 
@@ -212,8 +247,7 @@ int main(void)
 	size_t cap_bytes;
 	int err;
 
-	signal(SIGINT, stop_handler);
-	signal(SIGTERM, stop_handler);
+	install_handlers();
 
 	err = open_pcm(&cap, SND_PCM_STREAM_CAPTURE, CAPTURE_DEV);
 	if (err < 0) {
@@ -265,8 +299,10 @@ int main(void)
 		printf("  playback done\n");
 	}
 
-	snd_pcm_close(cap);
-	snd_pcm_close(pb);
+	if (cap)
+		snd_pcm_close(cap);
+	if (pb)
+		snd_pcm_close(pb);
 	free(buf);
 	restore_mode();
 	puts("bye");

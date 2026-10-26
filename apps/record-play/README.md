@@ -54,3 +54,8 @@ amixer -c 0 cset numid=23 3   # PGA-ADC Mux Right -> MIC+preamp Right
   `snd_pcm_sw_params_*` — do not remove that block.
 - stdin is put into raw mode for "any key" detection; capture polls it via
   `select()` between ALSA reads so 'S' stops mid-recording.
+- signal handling: handlers are installed via `sigaction` **without
+  SA_RESTART** (glibc `signal()` auto-restarts blocking reads, which made
+  Ctrl-C dead after the first loop iteration); SIGTSTP restores the terminal
+  and SIGCONT re-arms raw mode, so suspending never leaves the tty broken nor
+  the PCM devices locked.
