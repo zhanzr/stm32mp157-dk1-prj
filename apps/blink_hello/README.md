@@ -34,16 +34,23 @@ oversampling with VREF+ = 2.5 V from the internal VREFBUF** (confirmed by
 | ADC1+ADC2| 18   | `in_voltage18_raw` | 0 (dead on this board) | -         |
 | ADC1+ADC2| 19   | `in_voltage19_raw` | ~1.68 V | -         |
 
-Notes:
+Notes (per RM0436 Rev 7 ch.29, Table 187 "ADC interconnection"):
 
-- The analog temperature sensor VTS described in DS 3.23 (ADC2_INP12) is
-  **not wired in this BSP**: there is no channel@12 in the device tree or sysfs,
-  and the factory TS calibration OTP words (92/94) read as zero on this chip.
-  Use the DTS thermal zone for temperature.
-- DS 3.23's channel numbering differs from this BSP's DT (labels vrefint@13 /
-  vddcore@14); trust sysfs at runtime — the app enumerates whatever is exposed.
-- Channel 19 shows ~1.68 V on both ADC instances but is unlabeled in this
-  image; identify before relying on it.
+- The 6 hardware-internal channels are all on ADC2: VINP[12]=VSENSE,
+  VINP[13]=VREFINT, VINP[14]=VDDCORE, VINP[15]=VBAT/4, VINP[16]=dac_out1,
+  VINP[17]=dac_out2.
+- This BSP instantiates only VREFINT (ch13) and VDDCORE (ch14); VSENSE (ch12)
+  is skipped — temperature is delegated to the DTS block (RM0436 ch.30),
+  which drives the thermal zone above. VBAT and the DAC loopbacks are not
+  instantiated either.
+- ch18/ch19 are **not** internal channels: RM0436 maps them to external pins
+  ADC1/ADC2_INP18/INP19 (INN tied to VSSA). On DK1 they are unconnected:
+  ch18 reads 0, ch19 floats mid-rail (~1.68 V). Do not use them as sensors.
+- The processed value on ch13 is unreliable on this chip: it requires the OTP
+  VREFINT_CAL word (52), which reads as zero (unprogrammed), so the driver's
+  VREF+ computation degenerates.
+- DS 3.23's channel numbering (VTS=ADC2_INP12) matches RM0436; trust sysfs at
+  runtime — the app enumerates whatever is exposed.
 
 ## Build (in WSL, from the repository root)
 
