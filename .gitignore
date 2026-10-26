@@ -1,2 +1,4 @@
 *.o
 apps/*/blink_hello
+apps/*/coremark-arm
+apps/*/coremark-thumb
