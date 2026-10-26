@@ -33,3 +33,4 @@ Expansion connector pinouts: [docs/expansion-connectors.md](docs/expansion-conne
 - [apps/blink_hello](apps/blink_hello) — blinks LD5/LD6/LD7, samples DTS temperature + ADC channels
 - [apps/coremark](apps/coremark) — EEMBC CoreMark, ARM vs Thumb-2 builds and scores
 - [apps/record-play](apps/record-play) — interactive audio record (30 s / S-key) and playback, loops
+- [apps/netbench](apps/netbench) — TCP throughput benchmark for GbE and USB NCM gadget
