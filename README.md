@@ -36,3 +36,4 @@ Expansion connector pinouts: [docs/expansion-connectors.md](docs/expansion-conne
 - [apps/netbench](apps/netbench) — TCP throughput benchmark for GbE and USB NCM gadget
 - [apps/ssd1317_md066_64x48_iic](apps/ssd1317_md066_64x48_iic) — SSD1317 64x48 OLED on I2C5 (CN2), demo port from f425-start
 - [apps/blink_check](apps/blink_check) — CN2 wire-continuity blinker + pin-state probe (bring-up diagnostics)
+- [apps/a7_m4_hello](apps/a7_m4_hello) — A7↔M4 rpmsg hello: vendored CubeMP1 subset M4 firmware + A7 manager

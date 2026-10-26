@@ -6,3 +6,7 @@ apps/*/record-play
 apps/*/netbench
 apps/*/ssd1317_demo
 apps/*/blink_check
+apps/a7_m4_hello/m4/build
+apps/a7_m4_hello/a7_manager
+apps/a7_m4_hello/m4/OpenAMP_TTY_echo.elf
+apps/a7_m4_hello/m4/OpenAMP_TTY_echo.map
