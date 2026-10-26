@@ -5,3 +5,4 @@ apps/*/coremark-thumb
 apps/*/record-play
 apps/*/netbench
 apps/*/ssd1317_demo
+apps/*/blink_check
