@@ -1,7 +1,8 @@
 # blink_hello
 
-Blinks the user LEDs LD5/LD6/LD7 using the GPIO character device UAPI
-(`linux/gpio.h` v2 ioctls) — no libgpiod dependency.
+Blinks the user LEDs LD5/LD6/LD7 and periodically samples the on-board
+sensors, using the GPIO character device UAPI (`linux/gpio.h` v2 ioctls) and
+sysfs (`/sys/class/thermal`, `/sys/bus/iio`) — no library dependencies.
 
 ## Board facts used by this app
 
@@ -16,6 +17,33 @@ PA13/PA14 may be held by the kernel `gpio-keys` driver (user buttons B3/B4).
 If a line is busy, `blink_hello` reports it and keeps blinking the remaining
 LEDs. To reclaim LD5/LD6 permanently, disable the buttons in the board
 devicetree and reflash `bootfs`.
+
+## Sensors reported (verified on this board)
+
+Temperature — the **DTS digital temperature sensor** (DS 3.24), exposed by the
+`stm32_thermal` driver as `thermal_zone0 [cpu-thermal]`, printed in °C.
+
+ADC — the two ADC instances are exposed via IIO, sampled at **16-bit
+oversampling with VREF+ = 2.5 V from the internal VREFBUF** (confirmed by
+`in_voltage_scale` = 2500/65536 and the enabled `vrefbuf@50025000` DT node):
+
+| Instance | ch   | sysfs            | Reading on this board | DT label  |
+|----------|------|------------------|-----------------------|-----------|
+| ADC2     | 13   | `in_voltage13_input` (processed mV) | ~2.52 V (≈ VREFBUF rail) | vrefint |
+| ADC2     | 14   | `in_voltage14_raw` × scale | ~1.18 V (matches the 1.2 V core) | vddcore |
+| ADC1+ADC2| 18   | `in_voltage18_raw` | 0 (dead on this board) | -         |
+| ADC1+ADC2| 19   | `in_voltage19_raw` | ~1.68 V | -         |
+
+Notes:
+
+- The analog temperature sensor VTS described in DS 3.23 (ADC2_INP12) is
+  **not wired in this BSP**: there is no channel@12 in the device tree or sysfs,
+  and the factory TS calibration OTP words (92/94) read as zero on this chip.
+  Use the DTS thermal zone for temperature.
+- DS 3.23's channel numbering differs from this BSP's DT (labels vrefint@13 /
+  vddcore@14); trust sysfs at runtime — the app enumerates whatever is exposed.
+- Channel 19 shows ~1.68 V on both ADC instances but is unlabeled in this
+  image; identify before relying on it.
 
 ## Build (in WSL, from the repository root)
 

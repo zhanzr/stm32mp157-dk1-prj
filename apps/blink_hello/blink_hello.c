@@ -1,3 +1,5 @@
+#include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -24,6 +26,7 @@ static const led_t leds[] = {
 
 #define NLEDS (sizeof(leds) / sizeof(leds[0]))
 #define BLINK_PERIOD_MS 250
+#define SENSOR_PERIOD_CYCLES 8
 
 static volatile sig_atomic_t running = 1;
 
@@ -83,6 +86,130 @@ static void set_led(int line_fd, int on)
 	ioctl(line_fd, GPIO_V2_LINE_SET_VALUES_IOCTL, &vals);
 }
 
+static int read_str_file(const char *path, char *buf, size_t len)
+{
+	FILE *f = fopen(path, "r");
+
+	if (!f)
+		return -1;
+	if (!fgets(buf, (int)len, f)) {
+		fclose(f);
+		return -1;
+	}
+	fclose(f);
+	buf[strcspn(buf, "\r\n")] = '\0';
+	return 0;
+}
+
+static int read_int_file(const char *path, int *out)
+{
+	FILE *f = fopen(path, "r");
+
+	if (!f)
+		return -1;
+	if (fscanf(f, "%d", out) != 1) {
+		fclose(f);
+		return -1;
+	}
+	fclose(f);
+	return 0;
+}
+
+static int read_double_file(const char *path, double *out)
+{
+	FILE *f = fopen(path, "r");
+
+	if (!f)
+		return -1;
+	if (fscanf(f, "%lf", out) != 1) {
+		fclose(f);
+		return -1;
+	}
+	fclose(f);
+	return 0;
+}
+
+static void report_sensors(void)
+{
+	DIR *d;
+	struct dirent *e;
+	char path[512];
+	char buf[128];
+
+	d = opendir("/sys/class/thermal");
+	if (d) {
+		while ((e = readdir(d))) {
+			int mt;
+
+			if (strncmp(e->d_name, "thermal_zone", 12))
+				continue;
+			snprintf(path, sizeof(path), "/sys/class/thermal/%s/type",
+				 e->d_name);
+			if (read_str_file(path, buf, sizeof(buf)))
+				continue;
+			snprintf(path, sizeof(path), "/sys/class/thermal/%s/temp",
+				 e->d_name);
+			if (read_int_file(path, &mt))
+				continue;
+			printf("thermal %s [%s]: %.3f C\n", e->d_name, buf,
+			       mt / 1000.0);
+		}
+		closedir(d);
+	}
+
+	d = opendir("/sys/bus/iio/devices");
+	if (d) {
+		while ((e = readdir(d))) {
+			double scale = 1.0;
+			int have_scale;
+
+			if (strncmp(e->d_name, "iio:device", 10))
+				continue;
+			snprintf(path, sizeof(path), "/sys/bus/iio/devices/%s/name",
+				 e->d_name);
+			if (read_str_file(path, buf, sizeof(buf)))
+				continue;
+			printf("adc %s [%s]:\n", e->d_name, buf);
+			snprintf(path, sizeof(path), "/sys/bus/iio/devices/%s/in_voltage_scale",
+				 e->d_name);
+			have_scale = (read_double_file(path, &scale) == 0);
+
+			for (int ch = 0; ch <= 19; ch++) {
+				char label[64] = "";
+				int have_label;
+				double mv;
+				int raw;
+
+				snprintf(path, sizeof(path),
+					 "/sys/bus/iio/devices/%s/in_voltage%d_label",
+					 e->d_name, ch);
+				have_label = (read_str_file(path, label,
+							    sizeof(label)) == 0);
+				snprintf(path, sizeof(path),
+					 "/sys/bus/iio/devices/%s/in_voltage%d_input",
+					 e->d_name, ch);
+				if (read_double_file(path, &mv) == 0) {
+					printf("  ch%02d%s%s%s: %.0f mV (processed)\n",
+					       ch, have_label ? " [" : "",
+					       label, have_label ? "]" : "", mv);
+					continue;
+				}
+				snprintf(path, sizeof(path),
+					 "/sys/bus/iio/devices/%s/in_voltage%d_raw",
+					 e->d_name, ch);
+				if (read_int_file(path, &raw) == 0) {
+					printf("  ch%02d%s%s%s: %.2f mV\n",
+					       ch, have_label ? " [" : "",
+					       label, have_label ? "]" : "",
+					       have_scale ? raw * scale : (double)raw);
+				}
+			}
+		}
+		closedir(d);
+	}
+	fflush(stdout);
+}
+
 int main(void)
 {
 	int chip_fds[8] = { 0 };
@@ -90,6 +217,7 @@ int main(void)
 	int line_fds[NLEDS] = { 0 };
 	int active[NLEDS] = { 0 };
 	int nactive = 0;
+	unsigned long cycles = 0;
 
 	signal(SIGINT, stop_handler);
 	signal(SIGTERM, stop_handler);
@@ -148,7 +276,8 @@ int main(void)
 		fprintf(stderr, "no LED available, exiting\n");
 		return 1;
 	}
-	printf("blinking %d LED(s), Ctrl-C to stop\n", nactive);
+	printf("blinking %d LED(s), sensors every %d ms, Ctrl-C to stop\n",
+	       nactive, SENSOR_PERIOD_CYCLES * 2 * BLINK_PERIOD_MS);
 
 	while (running) {
 		for (size_t i = 0; i < NLEDS; i++)
@@ -161,6 +290,8 @@ int main(void)
 				set_led(line_fds[i], 0);
 		for (int ms = 0; ms < BLINK_PERIOD_MS && running; ms += 20)
 			usleep(20000);
+		if (++cycles % SENSOR_PERIOD_CYCLES == 0)
+			report_sensors();
 	}
 
 	for (size_t i = 0; i < NLEDS; i++) {

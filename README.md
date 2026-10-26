@@ -30,4 +30,4 @@ Expansion connector pinouts: [docs/expansion-connectors.md](docs/expansion-conne
 
 ## Applications
 
-- [apps/blink_hello](apps/blink_hello) — blinks LD5/LD6/LD7
+- [apps/blink_hello](apps/blink_hello) — blinks LD5/LD6/LD7, samples DTS temperature + ADC channels
