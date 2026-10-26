@@ -32,7 +32,11 @@ ssh root@<board-ip> /usr/local/bin/coremark-arm
 ssh root@<board-ip> /usr/local/bin/coremark-thumb
 ```
 
-## Results — STM32MP157AAC (dual Cortex-A7 @ 800 MHz, single context, rev B)
+## Results — STM32MP157AAC (dual Cortex-A7 @ 650 MHz, single context, rev B)
+
+Clock verified on the running board: `ck_mpu` = 650 MHz
+(`/sys/kernel/debug/clk/clk_summary`, `scaling_cur_freq` = 650 MHz). The A
+part is a 650 MHz grade per the datasheet; the 800 MHz grades are C/F.
 
 Validated runs, 40000 iterations each (both CRC-checked correct):
 
@@ -45,7 +49,7 @@ Observations:
 
 - Thumb-2 is ~0.5 % faster and ~25 % smaller — expected on Cortex-A7 where
   Thumb-2 has full performance with higher code density.
-- ~1967–1977 CoreMark/s ≈ 2.46 CoreMark/MHz at 800 MHz, in line with
+- ~1967–1977 CoreMark/s @ 650 MHz ≈ 3.03–3.04 CoreMark/MHz, in line with
   published Cortex-A7 figures.
 - Pure single-ISA binaries are not feasible with the SDK: glibc/crt objects
   come with their own ISA attributes (mixed `Tag_ARM_ISA_use` +
