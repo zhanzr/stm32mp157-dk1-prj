@@ -38,6 +38,8 @@ function showTab(name) {
     p.classList.toggle('active', p.id === 'tab-' + name);
   });
   if (name === 'led') loadLeds();
+  if (name === 'cam') startCamStream();
+  else stopCamStream();
   if (name === 'sensor') { startAdc(); redrawAll(); }
   else stopAdc();                    /* poll sensors only while the tab is open */
   if (name === 'board') loadBoardInfo();
@@ -300,6 +302,33 @@ async function loadBoardInfo() {
   } else {
     set('info-weather', 'N/A');
   }
+}
+
+let camRetries = 0;
+
+function startCamStream() {
+  const ci = document.getElementById('cam-stream');
+  camRetries = 0;
+  setStatus('cam-status', 'connecting…', '');
+  ci.onload = () => { camRetries = 0; setStatus('cam-status', 'live', 'ok'); };
+  ci.onerror = () => {
+    setStatus('cam-status', 'camera busy or absent — retrying…', 'err');
+    if (document.getElementById('tab-cam').classList.contains('active') &&
+        camRetries < 15) {
+      camRetries++;
+      setTimeout(() => {
+        if (document.getElementById('tab-cam').classList.contains('active'))
+          ci.src = '/stream?r=' + Date.now();
+      }, 2000);
+    }
+  };
+  ci.src = '/stream?r=' + Date.now();
+}
+
+function stopCamStream() {
+  const ci = document.getElementById('cam-stream');
+  if (ci) ci.src = '';
+  setStatus('cam-status', 'stopped', '');
 }
 
 document.getElementById('info-refresh').addEventListener('click', loadBoardInfo);
