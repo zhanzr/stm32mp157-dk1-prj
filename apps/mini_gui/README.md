@@ -33,10 +33,25 @@ make stop
 ```
 
 `make run` first terminates any process holding `/dev/video*` (a previous
-camera app keeps the device busy otherwise), then sets
+camera app keeps the device busy otherwise), then launches the app **as the
+`weston` user** via `runuser -u weston` with
 `XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0` (Weston runs as
-user `weston`, uid 1000) and starts the app in the background; its log is
-`/tmp/mini_gui.log`.
+user `weston`, uid 1000); its log is `/tmp/mini_gui.log`.
+
+## Performance notes (what was optimized)
+
+- **Runs as `weston`** — the proper display client for the session.
+- **Sensor sampling runs in a background pthread** (500 ms cadence); the
+  GTK main loop only receives redraw requests via
+  `g_main_context_invoke` — sysfs reads no longer stall the UI. A
+  `g_timeout` fallback is compiled in if the thread cannot be created.
+- **`gtkglsink` (GL) does not work on this image** — "Failed to initialize
+  OpenGL with Gtk" both as root and as weston (no usable EGL userspace for
+  applications), so the software `gtksink` remains the camera sink. A
+  `videorate ! framerate=15/1` throttle experiment was **reverted**: it
+  broke pipeline linking with the GTK sinks (`not-linked`). If smoothness
+  matters more than anything, the browser-based `e_server` UI is the
+  smooth path — its rendering happens in the PC browser, not on the board.
 
 ## Dependencies (all present in the SDK sysroot and on the board image)
 

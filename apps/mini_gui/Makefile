@@ -3,7 +3,7 @@ RDIR ?= /usr/local/bin
 CC ?= cc
 PKGS := gtk+-3.0 gstreamer-1.0 gstreamer-video-1.0
 
-CFLAGS := -O2 -Wall -Wextra $(shell pkg-config --cflags $(PKGS))
+CFLAGS := -O2 -Wall $(shell pkg-config --cflags $(PKGS))
 LIBS := $(shell pkg-config --libs $(PKGS))
 
 all: mini_gui
@@ -24,10 +24,10 @@ kill-cam-holders:
 	done; exit 0'
 
 run: kill-cam-holders
-	@ssh $(BOARD) 'pkill mini_gui 2>/dev/null; sleep 0.3; \
-	export XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0; \
-	nohup $(RDIR)/mini_gui >/tmp/mini_gui.log 2>&1 & sleep 2; \
-	pgrep -a mini_gui || cat /tmp/mini_gui.log'
+	@ssh $(BOARD) 'pkill -9 mini_gui 2>/dev/null; sleep 0.3; \
+	usermod -aG video,render weston 2>/dev/null; \
+	runuser -u weston -- sh -c "export XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=wayland-0; nohup $(RDIR)/mini_gui >/tmp/mini_gui.log 2>&1 &"; \
+	sleep 2; pgrep -a mini_gui || tail -6 /tmp/mini_gui.log'
 
 stop:
 	@ssh $(BOARD) 'pkill mini_gui'

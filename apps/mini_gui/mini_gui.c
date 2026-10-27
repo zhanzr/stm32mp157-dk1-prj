@@ -3,6 +3,7 @@
 #include <gtk/gtk.h>
 #include <gst/gst.h>
 #include <linux/videodev2.h>
+#include <pthread.h>
 #include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
@@ -234,7 +235,24 @@ static void sample_tick_scan(void)
 	closedir(d);
 }
 
-static gboolean sample_tick(gpointer user)
+static gboolean queue_draw_idle(gpointer user)
+{
+	gtk_widget_queue_draw(GTK_WIDGET(user));
+	return G_SOURCE_REMOVE;
+}
+
+static void *sample_thread_fn(void *arg)
+{
+	(void)arg;
+	while (1) {
+		sample_tick_scan();
+		g_main_context_invoke(NULL, queue_draw_idle, plot_area);
+		usleep(SAMPLE_MS * 1000);
+	}
+	return NULL;
+}
+
+static gboolean sample_tick_fallback(gpointer user)
 {
 	(void)user;
 	sample_tick_scan();
@@ -569,7 +587,7 @@ int main(int argc, char **argv)
 	gtk_box_pack_start(GTK_BOX(vbox), plot_area, TRUE, TRUE, 0);
 	g_signal_connect(plot_area, "draw", G_CALLBACK(draw_cb), NULL);
 
-	g_timeout_add(SAMPLE_MS, sample_tick, NULL);
+	{ pthread_t spt; if (pthread_create(&spt, NULL, sample_thread_fn, NULL) != 0) g_timeout_add(SAMPLE_MS, sample_tick_fallback, NULL); }
 
 	gtk_widget_show_all(win);
 	gtk_main();
