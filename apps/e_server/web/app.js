@@ -50,8 +50,8 @@ tabButtons.forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)
 /* ----------------------------- Tab 1: LEDs ------------------------------- */
 
 /* apollo-f429: LED0 = PB1, LED1 = PB0 (both low-active, LOW = ON). */
-const LED_NAMES = ['LD5 (PA14)', 'LD6 (PA13)'];
-let ledStates = [0, 0];
+const LED_NAMES = ['LD5 (PA14)', 'LD6 (PA13)', 'LD7 (PH7)'];
+let ledStates = [0, 0, 0];
 
 function renderLeds() {
   const list = document.getElementById('led-list');
@@ -72,7 +72,7 @@ function renderLeds() {
 async function loadLeds() {
   try {
     const j = await getJSON('/api/leds');
-    ledStates = (j.leds && j.leds.length === 2) ? j.leds.slice() : [0, 0];
+    ledStates = (j.leds && j.leds.length === 3) ? j.leds.slice() : [0, 0, 0];
     renderLeds();
   } catch (e) {
     setStatus('led-status', 'failed to load LED state', 'err');
@@ -92,7 +92,7 @@ async function setLed(i, on) {
     do {
       const sent = ledStates.slice();
       const j = await postJSON('/api/leds', { leds: sent });
-      ledStates = (j.leds && j.leds.length === 2) ? j.leds.slice() : ledStates;
+      ledStates = (j.leds && j.leds.length === 3) ? j.leds.slice() : ledStates;
       ledDirty = JSON.stringify(sent) !== JSON.stringify(ledStates);
     } while (ledDirty);
     renderLeds();
@@ -236,7 +236,7 @@ function drawPlot(p) {
 
   /* series */
   if (n >= 2) {
-    ctx.strokeStyle = '#4ea1ff';
+    ctx.strokeStyle = p.color || '#4ea1ff';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     for (let i = 0; i < n; i++) {
@@ -329,6 +329,16 @@ function stopCamStream() {
   const ci = document.getElementById('cam-stream');
   if (ci) ci.src = '';
   setStatus('cam-status', 'stopped', '');
+}
+
+const camToggleBtn = document.getElementById('cam-toggle');
+if (camToggleBtn) {
+  camToggleBtn.addEventListener('click', () => {
+    const ci = document.getElementById('cam-stream');
+    const on = ci.src && ci.src.indexOf('/stream') !== -1;
+    if (on) { stopCamStream(); camToggleBtn.textContent = 'Start stream'; }
+    else { startCamStream(); camToggleBtn.textContent = 'Stop stream'; }
+  });
 }
 
 document.getElementById('info-refresh').addEventListener('click', loadBoardInfo);

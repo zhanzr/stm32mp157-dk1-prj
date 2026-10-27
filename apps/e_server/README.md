@@ -69,14 +69,25 @@ cd apps/e_server
 $CC -O2 -Wall -Wextra -std=c11 -D_DEFAULT_SOURCE \
     -o e_server_arm server.c -lpthread -lm
 scp e_server_arm root@<board-ip>:/usr/local/bin/e_server
-ssh root@<board-ip> '/usr/local/bin/e_server 8080 &'
+ssh root@<board-ip> 'nohup /usr/local/bin/e_server 80 >/tmp/e_server.log 2>&1 &'
 ```
 
-Then open `http://<board-ip>:8080/` from any browser on the LAN.
+Then open `http://<board-ip>/` from any browser on the LAN (port **80**;
+the server runs as root so it may bind the privileged port).
 
-The `/api/leds` handlers drive the real LD5/LD6 through
-`/dev/gpiochipA` (GPIO character device, active-low) — the web checkboxes
-toggle the physical LEDs.
+The `/api/leds` handlers drive the real **LD5/LD6/LD7** through
+`/dev/gpiochipA` and `/dev/gpiochipH` (GPIO character device;
+LD5/LD6 low-active, LD7 high-active) — the web checkboxes toggle the
+physical LEDs.
+
+## Streaming tab
+
+`GET /stream` serves the UVC webcam as
+`multipart/x-mixed-replace` MJPEG (640x480 @ ~15 fps, hardware-compressed
+by the camera — no CPU encoding). The Streaming tab embeds it with a
+**Start/Stop stream** button; one viewer at a time (second client gets
+503), and the browser auto-retries if the camera was busy. Verified:
+~1.4 MB per 4 s (~2.8 Mbps) over LAN.
 
 ## Layout
 
