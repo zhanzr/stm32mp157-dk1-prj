@@ -54,6 +54,15 @@ Board GStreamer elements: `v4l2src`, `jpegdec`, `videoconvert`, `gtksink`,
 - Camera selection: scans `/dev/video*`, keeps nodes with
   `V4L2_CAP_VIDEO_CAPTURE` (UVC metadata nodes are skipped), tries
   MJPEG first (this webcam: 640×480@30 MJPG), then raw YUY2, then any raw.
-- `gtkglsink` works only with GL access (run as the weston user or grant
-  EGL device permissions); `gtksink` (software) is the reliable default.
+- `gtkglsink` requires EGL/GL: it fails with "Failed to initialize OpenGL
+  with Gtk" when the app runs as root over ssh (no GPU device access) —
+  `gtksink` (software, cairo) is tried second and is the reliable default.
+  The window background is forced to black via CSS so letterbox/unpainted
+  areas never show stale-pixel artifacts.
+- ADC scale: `_raw` channels are converted with the **global**
+  `in_voltage_scale` of the device (0.038147 mV/LSB for the 2.5 V/16-bit
+  setup). There is no per-channel `_scale` file.
+- `vrefint*` is marked uncalibrated: the driver's processed value (~2.5 V)
+  is computed from the OTP `VREFINT_CAL` word, which is blank on this chip
+  (see `apps/blink_hello` notes) — treat its reading as invalid.
 - Sensors are re-read from sysfs on every tick; each panel auto-scales.

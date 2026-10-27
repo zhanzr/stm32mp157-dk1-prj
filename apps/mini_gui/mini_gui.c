@@ -34,12 +34,12 @@ static const struct {
 	int ch;
 	const char *name;
 } internal_map[] = {
-	{ 12, "vsense(T)" },
-	{ 13, "vrefint"   },
-	{ 14, "vddcore"   },
-	{ 15, "vbat/4"    },
-	{ 16, "dac1"      },
-	{ 17, "dac2"      },
+	{ 12, "vsense(T)*" },
+	{ 13, "vrefint*"   },
+	{ 14, "vddcore"    },
+	{ 15, "vbat/4"     },
+	{ 16, "dac1"       },
+	{ 17, "dac2"       },
 };
 
 static int read_str_file(const char *path, char *buf, size_t len)
@@ -113,6 +113,7 @@ static int find_adc2_base(char *base, size_t len)
 static void scan_sensors(void)
 {
 	char base[256];
+	char path[512];
 
 	memset(&s_temp, 0, sizeof(s_temp));
 	snprintf(s_temp.name, sizeof(s_temp.name), "CPU temp (DTS)");
@@ -131,36 +132,40 @@ static void scan_sensors(void)
 		fprintf(stderr, "mini-gui: ADC2 instance not found\n");
 		return;
 	}
-	for (size_t i = 0; i < sizeof(internal_map) / sizeof(internal_map[0]);
-	     i++) {
-		char path[512];
-		double mv = 0, scale = 1;
-		int have = 0;
-		series_t *s;
+	{
+		double gscale = 1.0;
 
-		snprintf(path, sizeof(path), "%s/in_voltage%d_input", base,
-			 internal_map[i].ch);
-		if (read_double_file(path, &mv) == 0)
-			have = 1;
-		else {
-			snprintf(path, sizeof(path), "%s/in_voltage%d_raw",
+		snprintf(path, sizeof(path), "%s/in_voltage_scale", base);
+		read_double_file(path, &gscale);
+		for (size_t i = 0;
+		     i < sizeof(internal_map) / sizeof(internal_map[0]);
+		     i++) {
+			char path2[512];
+			double mv = 0;
+			int have = 0;
+			series_t *s;
+
+			snprintf(path2, sizeof(path2), "%s/in_voltage%d_input",
 				 base, internal_map[i].ch);
-			if (read_double_file(path, &mv) == 0) {
-				snprintf(path, sizeof(path),
-					 "%s/in_voltage%d_scale", base,
-					 internal_map[i].ch);
-				if (read_double_file(path, &scale) == 0)
-					mv *= scale;
+			if (read_double_file(path2, &mv) == 0)
 				have = 1;
+			else {
+				snprintf(path2, sizeof(path2),
+					 "%s/in_voltage%d_raw", base,
+					 internal_map[i].ch);
+				if (read_double_file(path2, &mv) == 0) {
+					mv *= gscale;
+					have = 1;
+				}
 			}
+			if (!have)
+				continue;
+			s = g_new0(series_t, 1);
+			snprintf(s->name, sizeof(s->name), "%s (mV)",
+				 internal_map[i].name);
+			series_append(s, mv);
+			g_ptr_array_add(volts, s);
 		}
-		if (!have)
-			continue;
-		s = g_new0(series_t, 1);
-		snprintf(s->name, sizeof(s->name), "%s (mV)",
-			 internal_map[i].name);
-		series_append(s, mv);
-		g_ptr_array_add(volts, s);
 	}
 }
 
@@ -168,6 +173,7 @@ static void sample_tick_scan(void)
 {
 	char path[512];
 	double v;
+	double gscale = 1.0;
 	DIR *d;
 	struct dirent *e;
 
@@ -178,6 +184,13 @@ static void sample_tick_scan(void)
 
 	if (find_adc2_base(path, sizeof(path)) < 0)
 		return;
+	{
+		double gscale = 1.0;
+		char spath[600];
+
+		snprintf(spath, sizeof(spath), "%s/in_voltage_scale", path);
+		read_double_file(spath, &gscale);
+	}
 	d = opendir(path);
 	if (!d)
 		return;
@@ -206,10 +219,7 @@ static void sample_tick_scan(void)
 		} else if (strstr(e->d_name, "_raw")) {
 			if (read_double_file(lpath, &mv) != 0)
 				continue;
-			snprintf(lpath, sizeof(lpath), "%s/in_voltage%d_scale",
-				 path, internal_map[mapped].ch);
-			if (read_double_file(lpath, &scale) == 0)
-				mv *= scale;
+			mv *= gscale;
 		} else {
 			continue;
 		}
@@ -408,7 +418,6 @@ static int cam_try_build(cam_try_t *t, const char *dev, const char *mode,
 	return 0;
 }
 
-static GtkWidget *cam_box;
 
 static GtkWidget *build_camera(GtkWidget *parent_box)
 {
@@ -437,6 +446,8 @@ static GtkWidget *build_camera(GtkWidget *parent_box)
 				continue;
 			gtk_box_pack_start(GTK_BOX(parent_box), t.widget,
 					   TRUE, TRUE, 0);
+			gtk_widget_set_hexpand(t.widget, TRUE);
+			gtk_widget_set_vexpand(t.widget, TRUE);
 			gtk_widget_show(t.widget);
 			gtk_widget_realize(t.widget);
 			while (gtk_events_pending())
@@ -492,6 +503,17 @@ int main(int argc, char **argv)
 	gtk_window_set_title(GTK_WINDOW(win), "mini-gui - STM32MP157 DK1");
 	gtk_window_set_default_size(GTK_WINDOW(win), WIN_W, WIN_H);
 	g_signal_connect(win, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+	{
+		GtkCssProvider *css = gtk_css_provider_new();
+
+		gtk_css_provider_load_from_data(css,
+			"window { background-color: black; }", -1, NULL);
+		gtk_style_context_add_provider(
+			gtk_widget_get_style_context(win),
+			GTK_STYLE_PROVIDER(css),
+			GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+		g_object_unref(css);
+	}
 
 	vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
 	gtk_container_add(GTK_CONTAINER(win), vbox);
