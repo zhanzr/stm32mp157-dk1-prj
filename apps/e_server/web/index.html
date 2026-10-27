@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>e_server · stm32mp157-dk1</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>e_server</h1>
+  <p class="sub">stm32mp157-dk1 &middot; embedded web demo</p>
+  <div class="board-strip">
+    <img src="public/dk1_board_0.png" alt="stm32mp157a-dk1 board">
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="led">LED control</button>
+  <button class="tab-btn" data-tab="sensor">Sensors</button>
+  <button class="tab-btn" data-tab="board">Board info</button>
+</nav>
+
+<main>
+  <!-- Tab 1: LED control -->
+  <section id="tab-led" class="panel active">
+    <h2>LED control</h2>
+    <p>Check / uncheck to switch the two on-board LEDs
+       (LD5 = PA14, LD6 = PA13, low-active). Each change is sent
+       to the board and applied immediately (no page reload).</p>
+    <div id="led-list"></div>
+    <p id="led-status" class="status"></p>
+  </section>
+
+  <!-- Tab 2: Sensor values -->
+  <section id="tab-sensor" class="panel">
+    <h2>Sensor values</h2>
+    <div class="row">
+      <label for="adc-interval">Sample interval</label>
+      <select id="adc-interval">
+        <option value="1000">1 s</option>
+        <option value="2000">2 s</option>
+        <option value="4000">4 s</option>
+      </select>
+      <span class="status">samples are polled only while this tab is open</span>
+    </div>
+    <div class="plots">
+      <div class="plot">
+        <h3>VREFINT (mV, uncal)</h3>
+        <canvas id="plot-vrefint"></canvas>
+      </div>
+      <div class="plot">
+        <h3>CPU temperature (&deg;C)</h3>
+        <canvas id="plot-temp"></canvas>
+      </div>
+      <div class="plot">
+        <h3>VDDCORE (mV)</h3>
+        <canvas id="plot-vddcore"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tab 3: Board info -->
+  <section id="tab-board" class="panel">
+    <h2>Board information</h2>
+    <div class="row">
+      <button id="info-refresh" class="btn">Refresh</button>
+      <span class="status">unavailable fields are shown as N/A</span>
+    </div>
+    <table class="info">
+      <tr><th>Architecture</th><td id="info-arch">N/A</td></tr>
+      <tr><th>LAN IP</th><td id="info-lan">N/A</td></tr>
+      <tr><th>Public IP</th><td id="info-pub">N/A</td></tr>
+      <tr><th>Location</th><td id="info-geo">N/A</td></tr>
+      <tr><th>Weather</th><td id="info-weather">N/A</td></tr>
+    </table>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
