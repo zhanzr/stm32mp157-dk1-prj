@@ -6,13 +6,18 @@ apollo-f429 / fire-f429 `e_server` (frontend + host reference backend).
 
 Adapted for the DK1:
 
-- **LED control** drives the two on-board LEDs: **LD5 (PA14)** and
-  **LD6 (PA13)**, both low-active, via the GPIO character device
-  (`/dev/gpiochipA`, v2 UAPI).
+- **LED control** drives the three on-board LEDs: **LD5 (PA14)**,
+  **LD6 (PA13)** (low-active) and **LD7 (PH7)** (high-active), via the GPIO
+  character device (`/dev/gpiochipA|H`, v2 UAPI).
 - **Sensors** plots the internal channels only (same set as
   `apps/mini_gui`): **VREFINT** (ADC2 ch13, mV), **CPU temperature**
   (DTS thermal zone, °C) and **VDDCORE** (ADC2 ch14, mV). VBAT / DHT11
-  from the original do not exist on this board and were removed.
+  from the original do not exist on this board and were removed. Each plot
+  line has its own color.
+- **Streaming** tab: live **MJPEG camera stream** from a UVC webcam
+  (`/stream`, 640×480 MJPEG @ ~15 fps, multipart/x-mixed-replace — opens in
+  any browser `<img>`). One viewer at a time (further clients get 503);
+  the camera must not be held by another app (mini_gui etc.).
 - **Board info** reports `arch` + `lan_ip` (real), and best-effort
   `public_ip` / geo / weather over plain HTTP (ipify / ip-api / wttr.in);
   anything unavailable shows as "N/A".
@@ -22,11 +27,28 @@ Adapted for the DK1:
 | Route           | Description |
 | --------------- | ----------- |
 | `GET /`         | gzipped page (CSS/JS inlined) |
-| `GET /api/leds` | `{"leds":[0,0]}` — {LD5, LD6} |
-| `POST /api/leds`| body `{"leds":[1,0]}` → applied (LD5 on), `{"leds":[1,0]}` |
-| `GET /api/adc`  | `{"vrefint_mv":2517.0,"vddcore_mv":1177.6,"temp_c":49.72,"ts":…}` (missing sensors → `null`) |
+| `GET /api/leds` | `{"leds":[0,0,0]}` — {LD5, LD6, LD7} |
+| `POST /api/leds`| body `{"leds":[1,0,1]}` → applied (LD5+LD7 on), `{"leds":[1,0,1]}` |
+| `GET /api/adc`  | `{"vrefint_mv":2519.0,"vddcore_mv":1181.9,"temp_c":50.51,"ts":…}` (missing sensors → `null`) |
+| `GET /stream`   | MJPEG multipart stream (640×480 @ ~15 fps), single viewer |
 | `GET /api/info` | `{"arch":"arm","lan_ip":…,"public_ip":…,"geo":…,"weather":…,"ts":…}` |
 | `GET /public/*` | raw image bytes from `embedded_files[]` |
+
+## Streaming implementation notes
+
+- The server opens the first capture-capable `/dev/videoN`, forces
+  **MJPEG 640×480** (the camera compresses in hardware — no CPU encoding),
+  mmaps 4 buffers and `STREAMON`s.
+- Each grabbed frame is pushed as one multipart part
+  (`--frame` + `Content-Length` + JPEG bytes); output is throttled to
+  ~15 fps (measured: 70 frames in 4.6 s, ~1.9 Mbps).
+- **Gotchas fixed during bring-up**: (1) the per-connection worker used to
+  close the socket after handing it to the stream thread — `/stream` now
+  takes ownership and the worker returns without closing; (2) the
+  `cam_stream` struct must be zeroed (an uninitialized one made the camera
+  thread hang forever before sending anything); (3) VREFINT needs `-u
+  _printf_float`-style care in general — here it is served as the raw
+  driver value which is uncalibrated on this chip (blank OTP).
 
 ## Build & run (host, x86 test)
 

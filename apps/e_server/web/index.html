@@ -18,6 +18,7 @@
 <nav class="tabs">
   <button class="tab-btn active" data-tab="led">LED control</button>
   <button class="tab-btn" data-tab="sensor">Sensors</button>
+  <button class="tab-btn" data-tab="cam">Streaming</button>
   <button class="tab-btn" data-tab="board">Board info</button>
 </nav>
 
@@ -25,8 +26,9 @@
   <!-- Tab 1: LED control -->
   <section id="tab-led" class="panel active">
     <h2>LED control</h2>
-    <p>Check / uncheck to switch the two on-board LEDs
-       (LD5 = PA14, LD6 = PA13, low-active). Each change is sent
+    <p>Check / uncheck to switch the three on-board LEDs
+       (LD5 = PA14 low-active, LD6 = PA13 low-active,
+       LD7 = PH7 high-active). Each change is sent
        to the board and applied immediately (no page reload).</p>
     <div id="led-list"></div>
     <p id="led-status" class="status"></p>
@@ -60,7 +62,17 @@
     </div>
   </section>
 
-  <!-- Tab 3: Board info -->
+  <!-- Tab 3: camera streaming -->
+  <section id="tab-cam" class="panel">
+    <h2>Camera streaming</h2>
+    <div class="row">
+      <span class="status">MJPEG stream, ~15 fps, 640x480 —
+        one viewer at a time</span>
+    </div>
+    <p><img id="cam-stream" alt="camera stream"></p>
+  </section>
+
+  <!-- Tab 4: Board info -->
   <section id="tab-board" class="panel">
     <h2>Board information</h2>
     <div class="row">

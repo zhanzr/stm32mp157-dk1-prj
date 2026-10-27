@@ -35,6 +35,8 @@
 #include <dirent.h>
 #include <sys/ioctl.h>
 #include <linux/gpio.h>
+#include <linux/videodev2.h>
+#include <sys/mman.h>
 
 #include "web_assets.h"
 
@@ -279,9 +281,19 @@ static int json_num_field(const char *body, const char *key, char *out, size_t n
 /* --------------------------------------------------------------------------
  * Application state + API handlers
  * ------------------------------------------------------------------------ */
-static int leds[2];                       /* 1 = LED on (line driven low)  */
-static int led_fds[2] = { -1, -1 };       /* LD5 = GPIOA14, LD6 = GPIOA13,
-                                           * both low-active on the DK1    */
+static int leds[3];                       /* 1 = LED on                    */
+static int led_fds[3] = { -1, -1, -1 };
+/* LD5 = GPIOA14 (low-active), LD6 = GPIOA13 (low-active),
+ * LD7 = GPIOH7  (HIGH-active) on the DK1                        */
+static const struct {
+  const char *chip;
+  unsigned int off;
+  int active_high;
+} led_map[3] = {
+  { "GPIOA", 14, 0 },
+  { "GPIOA", 13, 0 },
+  { "GPIOH",  7, 1 },
+};
 
 static int chip_open_by_label(const char *label)
 {
@@ -312,36 +324,39 @@ static int led_request(int chip_fd, unsigned int offset)
   return req.fd;
 }
 
-static void led_drive(int fd, int on)     /* low-active: on = line low */
+static void led_drive(int fd, int on, int active_high)
 {
   struct gpio_v2_line_values vals;
   memset(&vals, 0, sizeof(vals));
   vals.mask = 1;
-  vals.bits = on ? 0 : 1;
+  vals.bits = (on && !active_high) || (!on && active_high);
   ioctl(fd, GPIO_V2_LINE_SET_VALUES_IOCTL, &vals);
 }
 
 static void leds_init(void)
 {
-  static const unsigned int offs[2] = { 14, 13 };   /* PA14 = LD5, PA13 = LD6 */
-  int chip = chip_open_by_label("GPIOA");
-  if (chip < 0)
+  int chips[3] = { -1, -1, -1 };
+  for (int i = 0; i < 3; i++)
   {
-    fprintf(stderr, "leds: GPIOA not found, LED control disabled\n");
-    return;
+    if (i == 0 || strcmp(led_map[i].chip, led_map[i - 1].chip) != 0)
+      chips[i] = chip_open_by_label(led_map[i].chip);
+    else
+      chips[i] = chips[i - 1];
+    if (chips[i] < 0)
+    {
+      fprintf(stderr, "leds: %s not found, LED%d disabled\n",
+              led_map[i].chip, i + 5);
+      continue;
+    }
+    led_fds[i] = led_request(chips[i], led_map[i].off);
+    if (led_fds[i] >= 0) led_drive(led_fds[i], leds[i], led_map[i].active_high);
   }
-  for (int i = 0; i < 2; i++)
-  {
-    led_fds[i] = led_request(chip, offs[i]);
-    if (led_fds[i] >= 0) led_drive(led_fds[i], leds[i]);
-  }
-  close(chip);
 }
 
 static void leds_apply(void)
 {
-  for (int i = 0; i < 2; i++)
-    if (led_fds[i] >= 0) led_drive(led_fds[i], leds[i]);
+  for (int i = 0; i < 3; i++)
+    if (led_fds[i] >= 0) led_drive(led_fds[i], leds[i], led_map[i].active_high);
 }
 
 static void send_response(sock_t fd, int code, const char *status,
@@ -355,16 +370,17 @@ static void api_leds(sock_t fd, const char *method, const char *body)
     const char *b = strchr(body, '[');
     if (b)
     {
-      int a[2] = { 0, 0 };
-      int got = sscanf(b + 1, "%d,%d", &a[0], &a[1]);
+      int a[3] = { 0, 0, 0 };
+      int got = sscanf(b + 1, "%d,%d,%d", &a[0], &a[1], &a[2]);
       if (got > 0)
-        for (int i = 0; i < got && i < 2; i++) leds[i] = a[i] ? 1 : 0;
+        for (int i = 0; i < got && i < 3; i++) leds[i] = a[i] ? 1 : 0;
       leds_apply();
     }
   }
 
-  char resp[64];
-  int n = snprintf(resp, sizeof(resp), "{\"leds\":[%d,%d]}", leds[0], leds[1]);
+  char resp[80];
+  int n = snprintf(resp, sizeof(resp), "{\"leds\":[%d,%d,%d]}",
+                   leds[0], leds[1], leds[2]);
   send_response(fd, 200, "OK", "application/json", NULL, resp, (size_t)n);
 }
 
@@ -569,6 +585,215 @@ static void api_info(sock_t fd)
 }
 
 /* --------------------------------------------------------------------------
+ * MJPEG streaming (the "Streaming" tab). A single viewer is served from a
+ * dedicated capture instance; further clients get 503 (UVC devices allow
+ * one streamer).
+ * ------------------------------------------------------------------------ */
+static volatile int stream_busy;
+
+struct cam_stream {
+  int fd;
+  int nbuf;
+  struct { void *start; size_t len; } buf[4];
+};
+
+static void cam_close(struct cam_stream *cs);
+
+static int cam_open(struct cam_stream *cs)
+{
+  struct v4l2_capability cap;
+  struct v4l2_format fmt;
+  struct v4l2_requestbuffers req;
+  char path[32];
+
+  memset(cs, 0, sizeof(*cs));
+  for (int i = 0; i < 16; i++)
+  {
+    snprintf(path, sizeof(path), "/dev/video%d", i);
+    cs->fd = open(path, O_RDWR);
+    if (cs->fd < 0) continue;
+    memset(&cap, 0, sizeof(cap));
+    if (ioctl(cs->fd, VIDIOC_QUERYCAP, &cap) == 0 &&
+        (cap.device_caps & V4L2_CAP_VIDEO_CAPTURE) &&
+        (cap.device_caps & V4L2_CAP_STREAMING))
+      break;
+    close(cs->fd);
+    cs->fd = -1;
+  }
+  if (cs->fd < 0)
+  {
+    printf("cam_open: no capture device\n");
+    fflush(stdout);
+    return -1;
+  }
+  printf("cam_open: using %s\n", path);
+  fflush(stdout);
+
+  memset(&fmt, 0, sizeof(fmt));
+  fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  fmt.fmt.pix.width = 640;
+  fmt.fmt.pix.height = 480;
+  fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
+  fmt.fmt.pix.field = V4L2_FIELD_NONE;
+  if (ioctl(cs->fd, VIDIOC_S_FMT, &fmt) < 0)
+  {
+    close(cs->fd);
+    return -1;
+  }
+
+  memset(&req, 0, sizeof(req));
+  req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  req.memory = V4L2_MEMORY_MMAP;
+  req.count = 4;
+  if (ioctl(cs->fd, VIDIOC_REQBUFS, &req) < 0)
+  {
+    close(cs->fd);
+    return -1;
+  }
+  for (cs->nbuf = 0; cs->nbuf < (int)req.count; cs->nbuf++)
+  {
+    struct v4l2_buffer b;
+    memset(&b, 0, sizeof(b));
+    b.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    b.memory = V4L2_MEMORY_MMAP;
+    b.index = (unsigned int)cs->nbuf;
+    if (ioctl(cs->fd, VIDIOC_QUERYBUF, &b) < 0)
+    {
+      cam_close(cs);
+      return -1;
+    }
+    cs->buf[cs->nbuf].start = mmap(NULL, b.length, PROT_READ | PROT_WRITE,
+                                   MAP_SHARED, cs->fd, b.m.offset);
+    cs->buf[cs->nbuf].len = b.length;
+    if (cs->buf[cs->nbuf].start == MAP_FAILED)
+    {
+      cam_close(cs);
+      return -1;
+    }
+    if (ioctl(cs->fd, VIDIOC_QBUF, &b) < 0)
+    {
+      cam_close(cs);
+      return -1;
+    }
+  }
+  {
+    enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    if (ioctl(cs->fd, VIDIOC_STREAMON, &type) < 0)
+    {
+      printf("cam_open: STREAMON failed: %s\n", strerror(errno));
+      fflush(stdout);
+      cam_close(cs);
+      return -1;
+    }
+  }
+  printf("cam_open: streaming ready (%d buffers)\n", cs->nbuf);
+  fflush(stdout);
+  return 0;
+}
+
+static void cam_close(struct cam_stream *cs)
+{
+  enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+  if (cs->fd < 0) return;
+  ioctl(cs->fd, VIDIOC_STREAMOFF, &type);
+  for (int i = 0; i < cs->nbuf; i++)
+    if (cs->buf[i].start) munmap(cs->buf[i].start, cs->buf[i].len);
+  close(cs->fd);
+  cs->fd = -1;
+  cs->nbuf = 0;
+}
+
+static int cam_grab(struct cam_stream *cs, const char **data, size_t *len)
+{
+  struct v4l2_buffer b;
+
+  memset(&b, 0, sizeof(b));
+  b.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  b.memory = V4L2_MEMORY_MMAP;
+  if (ioctl(cs->fd, VIDIOC_DQBUF, &b) < 0) return -1;
+  *data = cs->buf[b.index].start;
+  *len = b.bytesused;
+  if (ioctl(cs->fd, VIDIOC_QBUF, &b) < 0) return -1;
+  return 0;
+}
+
+static void *stream_thread(void *arg)
+{
+  sock_t fd = (sock_t)(intptr_t)arg;
+  struct cam_stream cs;
+  static const char boundary[] = "\r\n--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ";
+  char hdr[128];
+  double last = 0;
+  int frames = 0;
+
+  memset(&cs, 0, sizeof(cs));
+  if (cam_open(&cs) < 0)
+  {
+    send_response(fd, 503, "Service Unavailable", "text/plain", NULL,
+                  "camera busy or unavailable", 27);
+    stream_busy = 0;
+    XCLOSE(fd);
+    return NULL;
+  }
+  send_all(fd, "HTTP/1.1 200 OK\r\n"
+               "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n"
+               "Cache-Control: no-store\r\n"
+               "Connection: close\r\n\r\n", 121);
+  printf("stream: client connected\n");
+  while (1)
+  {
+    const char *data;
+    size_t len;
+    struct timespec ts;
+
+    if (cam_grab(&cs, &data, &len) < 0) break;
+    /* cap at ~15 fps so a browser tab never eats the whole CPU */
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    double now = (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+    if (now - last < 0.06) continue;
+    last = now;
+
+    snprintf(hdr, sizeof(hdr), "%s%zu\r\n\r\n", boundary, len);
+    send_all(fd, hdr, strlen(hdr));
+    send_all(fd, data, len);
+    frames++;
+    if (send(fd, "\r\n", 2, MSG_NOSIGNAL) <= 0) break;
+  }
+  printf("stream: client gone (%d frames)\n", frames);
+  cam_close(&cs);
+  XCLOSE(fd);
+  stream_busy = 0;
+  return NULL;
+}
+
+static void start_stream(sock_t fd)
+{
+  if (stream_busy)
+  {
+    send_response(fd, 503, "Service Unavailable", "text/plain", NULL,
+                  "a stream client is already active", 33);
+    XCLOSE(fd);
+    return;
+  }
+  stream_busy = 1;
+#if defined(_WIN32)
+  HANDLE h = (HANDLE)_beginthreadex(NULL, 0, stream_thread,
+                                    (void *)(intptr_t)fd, 0, NULL);
+  if (h) CloseHandle(h); else { stream_busy = 0; XCLOSE(fd); }
+#else
+  pthread_t t;
+  if (pthread_create(&t, NULL, stream_thread, (void *)(intptr_t)fd) != 0)
+  {
+    stream_busy = 0;
+    XCLOSE(fd);
+  }
+  else
+    pthread_detach(t);
+#endif
+}
+
+/* --------------------------------------------------------------------------
  * HTTP response plumbing + routing
  * ------------------------------------------------------------------------ */
 static void send_response(sock_t fd, int code, const char *status,
@@ -605,7 +830,10 @@ static void serve_public(sock_t fd, const char *path)
   send_response(fd, 404, "Not Found", "text/plain", NULL, "not found", 9);
 }
 
-static void route(sock_t fd, const char *method, const char *path, const char *body)
+/* Returns 1 when the connection ownership was handed to a streaming thread
+ * (the caller must NOT close the socket in that case), 0 otherwise. */
+static int route(sock_t fd, const char *method, const char *path,
+                 const char *body)
 {
   if (strcmp(path, "/") == 0 || strcmp(path, "/index.html") == 0)
   {
@@ -629,6 +857,16 @@ static void route(sock_t fd, const char *method, const char *path, const char *b
   {
     send_response(fd, 204, "No Content", "text/plain", NULL, NULL, 0);
   }
+  else if (strcmp(path, "/stream") == 0)
+  {
+    if (strcmp(method, "GET") == 0)
+    {
+      start_stream(fd);
+      return 1;
+    }
+    send_response(fd, 405, "Method Not Allowed", "text/plain", NULL,
+                  "GET only", 8);
+  }
   else if (strncmp(path, "/public/", 8) == 0)
   {
     serve_public(fd, path);
@@ -637,6 +875,7 @@ static void route(sock_t fd, const char *method, const char *path, const char *b
   {
     send_response(fd, 404, "Not Found", "text/plain", NULL, "not found", 9);
   }
+  return 0;
 }
 
 /* Read one request (headers + body) into buf. Sets *body to the start of the
@@ -697,7 +936,8 @@ static void *worker_thread(void *arg)
     {
       char *q = strchr(path, '?');
       if (q) *q = 0;
-      route(fd, method, path, body);
+      if (route(fd, method, path, body))
+        return 0;              /* streaming thread owns the socket now */
     }
   }
   XCLOSE(fd);
@@ -727,6 +967,7 @@ int main(int argc, char **argv)
   int port = argc > 1 ? atoi(argv[1]) : 8080;
   sock_t srv;
 
+  setvbuf(stdout, NULL, _IOLBF, 0);
   sock_init();
   leds_init();
 
