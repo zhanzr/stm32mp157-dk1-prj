@@ -236,19 +236,7 @@ static void sample_tick_scan(void)
 
 static gboolean queue_draw_idle(gpointer user)
 {
-	char txt[256];
-	size_t o = 0;
-
 	gtk_widget_queue_draw(GTK_WIDGET(user));
-	o += snprintf(txt + o, sizeof(txt) - o, "gui values: %.1f C",
-		      s_temp.last);
-	for (guint i = 0; i < volts->len && o < sizeof(txt) - 24; i++) {
-		series_t *s = g_ptr_array_index(volts, i);
-
-		o += snprintf(txt + o, sizeof(txt) - o, " | %s: %.1f",
-			      s->name, s->last);
-	}
-	printf("%s\n", txt);
 	return G_SOURCE_REMOVE;
 }
 
@@ -467,7 +455,9 @@ static int cam_try_build(cam_try_t *t, const char *dev, const char *mode,
 			t->pipe = NULL;
 			return -1;
 		}
-		g_object_set(s, "force-aspect-ratio", TRUE, NULL);
+		if (g_object_class_find_property(
+			    G_OBJECT_GET_CLASS(s), "force-aspect-ratio"))
+			g_object_set(s, "force-aspect-ratio", TRUE, NULL);
 		g_object_get(s, "widget", &t->widget, NULL);
 		gst_object_unref(s);
 	}
@@ -481,11 +471,11 @@ static int cam_try_build(cam_try_t *t, const char *dev, const char *mode,
 
 static GtkWidget *build_camera(GtkWidget *parent_box)
 {
-	static const char *sinks[] = { "gtkglsink", "gtksink" };
+	static const char *sinks[] = { "gtkwaylandsink", "gtksink" };
 	static const char *modes[] = {
-		"image/jpeg ! jpegdec",
-		"video/x-raw,format=YUY2",
-		"video/x-raw",
+		"image/jpeg ! jpegdec ! queue",
+		"video/x-raw,format=YUY2 ! queue",
+		"video/x-raw ! queue",
 	};
 	char dev[64];
 	GtkWidget *cam = NULL;
@@ -514,18 +504,24 @@ static GtkWidget *build_camera(GtkWidget *parent_box)
 				gtk_main_iteration_do(FALSE);
 			gst_element_set_state(t.pipe, GST_STATE_PLAYING);
 			ret = gst_element_get_state(t.pipe, NULL, NULL,
-						    4 * GST_SECOND);
-			if (ret == GST_STATE_CHANGE_SUCCESS) {
+						    6 * GST_SECOND);
+			if (ret == GST_STATE_CHANGE_SUCCESS ||
+			    ret == GST_STATE_CHANGE_ASYNC) {
 				cam = t.widget;
 				printf("mini-gui: camera live on %s "
-				       "(%s, %s)\n", dev, sinks[si], modes[m]);
+				       "(%s, %s) state=%d\n", dev, sinks[si],
+				       modes[m], (int)ret);
 			} else {
 				GstBus *bus = gst_element_get_bus(t.pipe);
 				GstMessage *msg = gst_bus_pop_filtered(
 					bus, GST_MESSAGE_ERROR);
+				GstState st = GST_STATE_NULL;
 
-				printf("mini-gui: %s + %s failed\n",
-				       sinks[si], modes[m]);
+				gst_element_get_state(t.pipe, &st, NULL, 0);
+				printf("mini-gui: %s + %s failed "
+				       "(ret=%d, state=%s)\n", sinks[si],
+				       modes[m], (int)ret,
+				       gst_element_state_get_name(st));
 				if (msg) {
 					GError *e = NULL;
 					gchar *dbg = NULL;

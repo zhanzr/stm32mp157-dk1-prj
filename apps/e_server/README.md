@@ -82,6 +82,9 @@ physical LEDs.
 
 ## Streaming tab
 
+**OFF by default** — press *Start stream* to begin (button and state stay in
+sync; leaving the tab always stops the stream).
+
 `GET /stream` serves the UVC webcam as
 `multipart/x-mixed-replace` MJPEG (640x480 @ ~15 fps, hardware-compressed
 by the camera — no CPU encoding). The Streaming tab embeds it with a

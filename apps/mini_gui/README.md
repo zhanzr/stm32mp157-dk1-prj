@@ -2,7 +2,10 @@
 
 Minimal GTK3 GUI for the DK1 running on Weston/HDMI.
 
-- **Upper half**: live UVC webcam view embedded in the GTK window.
+- **Upper half**: live UVC webcam view embedded in the GTK window via
+  **`gtkwaylandsink`** (the ST/vendor element — frames render into a
+  Wayland sub-surface, no cairo copies, smooth like the vendor demos;
+  `gtksink` is the software fallback).
   Pipeline candidates are tried in order (all capture nodes × all modes ×
   both sinks) until one reaches PLAYING; the working combination observed
   on this hardware is `/dev/video0` + `image/jpeg ! jpegdec` +
