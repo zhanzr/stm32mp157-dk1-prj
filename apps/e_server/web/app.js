@@ -320,6 +320,7 @@ function startCamStream() {
   setStatus('cam-status', 'connecting…', '');
   ci.onload = () => { camRetries = 0; setStatus('cam-status', 'live', 'ok'); };
   ci.onerror = () => {
+    if (!camOn) return;              /* user pressed Stop: keep "stopped" */
     setStatus('cam-status', 'camera busy or absent — retrying…', 'err');
     if (camOn && camRetries < 15) {
       camRetries++;

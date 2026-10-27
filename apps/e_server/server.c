@@ -329,7 +329,7 @@ static void led_drive(int fd, int on, int active_high)
   struct gpio_v2_line_values vals;
   memset(&vals, 0, sizeof(vals));
   vals.mask = 1;
-  vals.bits = (on && !active_high) || (!on && active_high);
+  vals.bits = (on == active_high) ? 1 : 0;
   ioctl(fd, GPIO_V2_LINE_SET_VALUES_IOCTL, &vals);
 }
 
