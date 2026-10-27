@@ -38,8 +38,7 @@ function showTab(name) {
     p.classList.toggle('active', p.id === 'tab-' + name);
   });
   if (name === 'led') loadLeds();
-  if (name === 'cam') startCamStream();
-  else stopCamStream();
+  stopCamStream(true);            /* camera is OFF unless explicitly started */
   if (name === 'sensor') { startAdc(); redrawAll(); }
   else stopAdc();                    /* poll sensors only while the tab is open */
   if (name === 'board') loadBoardInfo();
@@ -306,38 +305,45 @@ async function loadBoardInfo() {
 
 let camRetries = 0;
 
+let camOn = false;
+
+function setCamUI(on) {
+  const btn = document.getElementById('cam-toggle');
+  if (btn) btn.textContent = on ? 'Stop stream' : 'Start stream';
+}
+
 function startCamStream() {
   const ci = document.getElementById('cam-stream');
+  camOn = true;
+  setCamUI(true);
   camRetries = 0;
   setStatus('cam-status', 'connecting…', '');
   ci.onload = () => { camRetries = 0; setStatus('cam-status', 'live', 'ok'); };
   ci.onerror = () => {
     setStatus('cam-status', 'camera busy or absent — retrying…', 'err');
-    if (document.getElementById('tab-cam').classList.contains('active') &&
-        camRetries < 15) {
+    if (camOn && camRetries < 15) {
       camRetries++;
       setTimeout(() => {
-        if (document.getElementById('tab-cam').classList.contains('active'))
-          ci.src = '/stream?r=' + Date.now();
+        if (camOn) ci.src = '/stream?r=' + Date.now();
       }, 2000);
     }
   };
   ci.src = '/stream?r=' + Date.now();
 }
 
-function stopCamStream() {
+function stopCamStream(quiet) {
   const ci = document.getElementById('cam-stream');
+  camOn = false;
+  setCamUI(false);
   if (ci) ci.src = '';
-  setStatus('cam-status', 'stopped', '');
+  setStatus('cam-status', quiet ? 'press "Start stream"' : 'stopped', '');
 }
 
 const camToggleBtn = document.getElementById('cam-toggle');
 if (camToggleBtn) {
   camToggleBtn.addEventListener('click', () => {
-    const ci = document.getElementById('cam-stream');
-    const on = ci.src && ci.src.indexOf('/stream') !== -1;
-    if (on) { stopCamStream(); camToggleBtn.textContent = 'Start stream'; }
-    else { startCamStream(); camToggleBtn.textContent = 'Stop stream'; }
+    if (camOn) stopCamStream();
+    else startCamStream();
   });
 }
 
