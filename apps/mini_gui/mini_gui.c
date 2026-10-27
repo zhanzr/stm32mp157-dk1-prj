@@ -186,7 +186,6 @@ static void sample_tick_scan(void)
 	if (find_adc2_base(path, sizeof(path)) < 0)
 		return;
 	{
-		double gscale = 1.0;
 		char spath[600];
 
 		snprintf(spath, sizeof(spath), "%s/in_voltage_scale", path);
@@ -237,7 +236,19 @@ static void sample_tick_scan(void)
 
 static gboolean queue_draw_idle(gpointer user)
 {
+	char txt[256];
+	size_t o = 0;
+
 	gtk_widget_queue_draw(GTK_WIDGET(user));
+	o += snprintf(txt + o, sizeof(txt) - o, "gui values: %.1f C",
+		      s_temp.last);
+	for (guint i = 0; i < volts->len && o < sizeof(txt) - 24; i++) {
+		series_t *s = g_ptr_array_index(volts, i);
+
+		o += snprintf(txt + o, sizeof(txt) - o, " | %s: %.1f",
+			      s->name, s->last);
+	}
+	printf("%s\n", txt);
 	return G_SOURCE_REMOVE;
 }
 
