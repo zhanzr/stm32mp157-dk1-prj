@@ -295,13 +295,28 @@ static gboolean draw_cb(GtkWidget *widget, cairo_t *cr, gpointer user)
 		char title[96];
 		char txt[64];
 		double lo = 1e18, hi = -1e18;
+		double col[3] = { 0.2, 0.9, 0.9 };
 
 		if (p == 0) {
 			s = &s_temp;
 			snprintf(title, sizeof(title), "%s", s->name);
+			col[0] = 1.0;
+			col[1] = 0.6;
+			col[2] = 0.1;
 		} else if ((int)volts->len >= p) {
+			static const double pal[7][3] = {
+				{ 0.2, 0.9, 0.9 }, { 0.9, 0.3, 0.9 },
+				{ 0.9, 0.9, 0.2 }, { 0.3, 0.9, 0.3 },
+				{ 0.9, 0.4, 0.4 }, { 0.6, 0.6, 1.0 },
+				{ 1.0, 1.0, 1.0 },
+			};
+			int pi = (p - 1) % 7;
+
 			s = g_ptr_array_index(volts, p - 1);
 			snprintf(title, sizeof(title), "%s", s->name);
+			col[0] = pal[pi][0];
+			col[1] = pal[pi][1];
+			col[2] = pal[pi][2];
 		} else {
 			snprintf(title, sizeof(title), "n/a");
 		}
@@ -339,9 +354,24 @@ static gboolean draw_cb(GtkWidget *widget, cairo_t *cr, gpointer user)
 				pad = hi * 0.05 + 0.5;
 			lo -= pad;
 			hi += pad;
-			draw_series(cr, px, py, pw, ph, s, lo, hi);
+			span = hi - lo;
+			cairo_set_source_rgb(cr, col[0], col[1], col[2]);
+			cairo_set_line_width(cr, 1.8);
+			for (int i = 0; i < s->count; i++) {
+				double vpx = px +
+					(s->count > 1 ?
+					 (double)i / (NPOINTS - 1) * pw : 0);
+				double vpy = py + ph -
+					(s->vals[i] - lo) / span * ph;
+
+				if (i == 0)
+					cairo_move_to(cr, vpx, vpy);
+				else
+					cairo_line_to(cr, vpx, vpy);
+			}
+			cairo_stroke(cr);
 		}
-		cairo_set_source_rgb(cr, 0.2, 0.9, 0.9);
+		cairo_set_source_rgb(cr, col[0], col[1], col[2]);
 		cairo_move_to(cr, px + pw / 2 - 20, py + ph - 8);
 		snprintf(txt, sizeof(txt), "%.2f", s->last);
 		cairo_show_text(cr, txt);
@@ -408,6 +438,7 @@ static int cam_try_build(cam_try_t *t, const char *dev, const char *mode,
 			t->pipe = NULL;
 			return -1;
 		}
+		g_object_set(s, "force-aspect-ratio", TRUE, NULL);
 		g_object_get(s, "widget", &t->widget, NULL);
 		gst_object_unref(s);
 	}
