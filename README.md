@@ -38,3 +38,4 @@ Expansion connector pinouts: [docs/expansion-connectors.md](docs/expansion-conne
 - [apps/blink_check](apps/blink_check) — CN2 wire-continuity blinker + pin-state probe (bring-up diagnostics)
 - [apps/a7_m4_hello](apps/a7_m4_hello) — A7↔M4 rpmsg hello: vendored CubeMP1 subset M4 firmware + A7 manager
 - [apps/coremark_m4_209m](apps/coremark_m4_209m) — CoreMark 1.0.1 on the Cortex-M4 @ 208.9 MHz, results via rpmsg trace
+- [apps/mini_gui](apps/mini_gui) — GTK mini GUI: embedded UVC camera (gtksink) + internal sensor plots

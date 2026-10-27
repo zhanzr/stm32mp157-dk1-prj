@@ -14,3 +14,4 @@ apps/coremark_m4_209m/m4/build
 apps/coremark_m4_209m/a7_coremark_manager
 apps/coremark_m4_209m/m4/coremark_m4.elf
 apps/coremark_m4_209m/m4/coremark_m4.map
+apps/mini_gui/mini_gui
