@@ -13,7 +13,9 @@ Minimal GTK3 GUI for the DK1 running on Weston/HDMI.
 - **Lower half**: a row of auto-scaling scrolling plots (500 ms sampling,
   120 points ≈ 60 s window), one panel per **internal** sensor:
   - CPU temperature (DTS digital sensor, `thermal_zone0`) in °C
-  - `vrefint` (ADC2 ch13, processed mV)
+  - `vrefint INVALID` (ADC2 ch13): the driver value (~2.5 V) is
+    **invalid on this chip** — its OTP calibration word is blank —
+    kept only to visualize the raw channel
   - `vddcore` (ADC2 ch14, raw × scale ≈ 1.18 V)
   - Internal channel map per RM0436 Table 187: ch12 vsense, ch13 vrefint,
     ch14 vddcore, ch15 vbat/4, ch16/17 dac — panels appear only for
@@ -77,7 +79,8 @@ Board GStreamer elements: `v4l2src`, `jpegdec`, `videoconvert`, `gtksink`,
 - ADC scale: `_raw` channels are converted with the **global**
   `in_voltage_scale` of the device (0.038147 mV/LSB for the 2.5 V/16-bit
   setup). There is no per-channel `_scale` file.
-- `vrefint*` is marked uncalibrated: the driver's processed value (~2.5 V)
-  is computed from the OTP `VREFINT_CAL` word, which is blank on this chip
+- `vrefint INVALID`: the driver's processed value (~2.5 V) is computed
+  from the OTP `VREFINT_CAL` word, which is blank on this chip
   (see `apps/blink_hello` notes) — treat its reading as invalid.
+  `vddcore` (~1.18 V) and the DTS temperature are valid.
 - Sensors are re-read from sysfs on every tick; each panel auto-scales.

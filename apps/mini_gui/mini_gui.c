@@ -36,7 +36,7 @@ static const struct {
 	const char *name;
 } internal_map[] = {
 	{ 12, "vsense(T)*" },
-	{ 13, "vrefint*"   },
+	{ 13, "vrefint INVALID" },
 	{ 14, "vddcore"    },
 	{ 15, "vbat/4"     },
 	{ 16, "dac1"       },
